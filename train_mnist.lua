@@ -7,11 +7,14 @@
 
 -- load torchnet:
 local tnt = require 'torchnet'
+require 'cudnn'
 
 -- use GPU or not:
 local cmd = torch.CmdLine()
 cmd:option('-usegpu', false, 'use gpu for training')
+cmd:option('-crit', 'sigmoid', 'use sigmoid or softmax')
 local config = cmd:parse(arg)
+print(config)
 print(string.format('running on %s', config.usegpu and 'GPU' or 'CPU'))
 
 -- function that sets of dataset iterator:
@@ -46,9 +49,10 @@ local function getIterator(mode)
 end
 
 -- set up logistic regressor:
-local net = dofile('network.lua')() --nn.Sequential():add(nn.Linear(784,10))
+
+local net = require('network')(config) --nn.Sequential():add(nn.Linear(784,10))
 print(net)
-local criterion = nn.BCECriterion()--nn.MultiLabelSoftMarginCriterion()--nn.ClassNLLCriterion()
+local criterion =  cudnn.VolumetricCrossEntropyCriterion() -- nn.MultiLabelMultiClassCriterion()--nn.BCECriterion()
 
 -- set up training engine:
 local engine = tnt.SGDEngine()
@@ -59,7 +63,12 @@ end
 engine.hooks.onSample = function(state)
 --   print('here!!!', state.sample.input)
    state.sample.input:div(256)
-   state.sample.target:div(256)
+   if config.crit == 'softmax' then
+      local len = math.floor(math.sqrt(state.sample.input:size(2)))
+      state.sample.target:resize(state.sample.input:size(1), 1, len, len)
+   else
+      state.sample.target:div(256)
+   end
 end
 
 engine.hooks.onForwardCriterion = function(state)
@@ -76,7 +85,6 @@ end
 
 -- set up GPU training:
 if config.usegpu then
-
    -- copy model to GPU:
    require 'cunn'
    net       = net:cuda()
@@ -85,8 +93,15 @@ if config.usegpu then
    -- copy sample to GPU buffer:
    local igpu, tgpu = torch.CudaTensor(), torch.CudaTensor()
    engine.hooks.onSample = function(state)
-      igpu:resize(state.sample.input:size() ):copy(state.sample.input:div(256))
-      tgpu:resize(state.sample.target:size()):copy(state.sample.target:div(256))
+      if config.crit == 'softmax' then
+      igpu:resize(state.sample.input:size()):copy(state.sample.input:div(256))
+      local len = math.floor(math.sqrt(state.sample.input:size(2)))
+      tgpu:resize(state.sample.input:size(1), 1, len, len)
+           :copy(state.sample.target)
+      else
+         igpu:resize(state.sample.input:size()):copy(state.sample.input:div(256))
+         tgpu:resize(state.sample.output:size()):copy(state.sample.target:div(256))
+      end
       state.sample.input  = igpu
       state.sample.target = tgpu
 --      print(igpu)
@@ -102,14 +117,10 @@ engine:train{
    maxepoch  = 5,
 }
 
--- measure test loss and error:
-meter:reset()
-clerr:reset()
+-- generate net:
 engine:test{
    network   = net,
    iterator  = getIterator('test'),
    criterion = criterion,
 }
-print(string.format('test loss: %2.4f; test error: %2.4f',
-   meter:value(), clerr:value{k = 1}))
 

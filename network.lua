@@ -11,7 +11,7 @@ require('MaskConv.lua')
 
 
 local function createModel(opt)
-
+   print(opt)
    local function testModel(model)
 --      model:double()
       local imageSize = 28
@@ -29,10 +29,16 @@ local function createModel(opt)
    model:add(nn.MaskConv('nn', 'A', 1, dim, 7, 7, 1, 1, 3, 3))
    model:add(nn.MaskConv('nn', 'B', dim, dim, 3, 3, 1, 1, 1, 1))
    model:add(nn.ReLU())
-   model:add(nn.MaskConv('nn', 'B', dim, dim, 1, 1))
-   model:add(nn.View(-1):setNumInputDims(3))
-   model:add(nn.Linear(28*28*dim, 28*28))
-   model:add(nn.Sigmoid())
+   model:add(nn.SpatialConvolution(dim, dim, 1, 1))
+   if opt.crit == 'softmax' then
+      model:add(nn.SpatialConvolution(dim, 256, 1, 1))
+      model:add(nn.Reshape(256, 1, 28, 28))
+--      model:add(nn.View(-1):setNumInputDims(2))
+   else
+      model:add(nn.View(-1):setNumInputDims(3))
+      model:add(nn.Linear(28*28*dim, 28*28))
+      model:add(nn.Sigmoid())
+   end
 
    testModel(model)
 
