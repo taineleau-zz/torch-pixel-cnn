@@ -3,7 +3,11 @@ Torch implementation of the pixel CNN architecture proposed in the paper
  [Pixel Recurrent Neural Networks](https://arxiv.org/abs/1601.06759
 ) and other variants.
 
-Will be back to update & commit after the final exam week at NUS :D.
+~~Will be back to update & commit after the final exam week at NUS :D.~~
+
+So busy these days, I am unlikely to contribute to this repo recently. But I'm happy to accept new PR on TODOs!
+
+
 
 #### Usage
 
